@@ -22,7 +22,7 @@ body {
     width: 100%;
     height: 100vh;
     height: 100dvh;
-    padding: 60px 20px 90px;
+    padding: 20px;
     position: relative;
 }
 
@@ -191,8 +191,8 @@ body {
 }
 
 .input-container {
-    position: absolute;
-    bottom: 20px;
+    position: relative;
+    margin-top: 30px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -260,94 +260,69 @@ body {
 
 /* Mobile Responsivity */
 @media (max-width: 768px) {
-    .container {
-        padding: 50px 15px 80px;
-    }
-    
     .settings-btn {
-        top: 10px;
-        right: 10px;
-        width: 38px;
-        height: 38px;
+        top: 15px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
     }
     
     .settings-panel {
-        top: 10px;
-        right: 10px;
-        left: 10px;
+        top: 15px;
+        right: 15px;
+        left: 15px;
         width: auto;
     }
     
     .avatar-container {
-        width: 55vw;
-        height: 55vw;
-        max-width: 300px;
-        max-height: 300px;
+        width: 70vw;
+        height: 70vw;
+        max-width: 350px;
+        max-height: 350px;
     }
     
     .input-container {
-        bottom: 15px;
+        margin-top: 25px;
         width: 95%;
         gap: 10px;
     }
     
     #userInput {
-        padding: 12px 18px;
+        padding: 14px 20px;
         font-size: 16px;
     }
     
     #sendButton {
-        width: 48px;
-        height: 48px;
+        width: 50px;
+        height: 50px;
         flex-shrink: 0;
     }
 }
 
 @media (max-width: 480px) {
-    .container {
-        padding: 45px 10px 70px;
-    }
-    
     .avatar-container {
-        width: 60vw;
-        height: 60vw;
-        max-width: 250px;
-        max-height: 250px;
+        width: 75vw;
+        height: 75vw;
+        max-width: 280px;
+        max-height: 280px;
     }
     
     .input-container {
-        bottom: 12px;
+        margin-top: 20px;
     }
     
     #userInput {
-        padding: 11px 14px;
+        padding: 12px 16px;
         font-size: 16px;
     }
     
     #sendButton {
-        width: 44px;
-        height: 44px;
+        width: 46px;
+        height: 46px;
     }
     
     #sendButton svg {
         width: 20px;
         height: 20px;
-    }
-}
-
-@media (max-height: 700px) {
-    .container {
-        padding: 40px 15px 65px;
-    }
-    
-    .avatar-container {
-        width: 45vmin;
-        height: 45vmin;
-        max-width: 220px;
-        max-height: 220px;
-    }
-    
-    .input-container {
-        bottom: 10px;
     }
 }
