@@ -259,7 +259,7 @@ class AvatarController {
         try {
             this.conversationHistory.push({ role: 'user', content: message });
             
-            const response = await fetch('/api/chat', {
+            const response = await fetch('http://cowggwwo8kc4s8wwos48o888.65.21.146.193.sslip.io/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messages: this.conversationHistory })
@@ -282,7 +282,7 @@ class AvatarController {
     }
     
     async generateSpeech(text) {
-        const response = await fetch('/api/speech', {
+        const response = await fetch('http://cowggwwo8kc4s8wwos48o888.65.21.146.193.sslip.io/api/speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, voice: this.selectedVoice })
