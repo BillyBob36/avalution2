@@ -9,29 +9,42 @@
 </head>
 <body>
     <div class="container">
-        <div class="controls-top">
-            <div class="quality-selector">
-                <label>Qualité:</label>
-                <select id="qualitySelect">
-                    <option value="quart">Quart (240p)</option>
-                    <option value="demi" selected>Demi (480p)</option>
-                    <option value="full">Full (960p)</option>
-                </select>
+        <button class="settings-btn" id="settingsBtn" aria-label="Paramètres">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+            </svg>
+        </button>
+        
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <span>Paramètres</span>
+                <button class="settings-close" id="settingsClose">&times;</button>
             </div>
-            <div class="silence-slider">
-                <label>Silence min: <span id="silenceValue">0.7</span>s</label>
-                <input type="range" id="silenceThreshold" min="0.3" max="3.0" step="0.1" value="0.7">
-            </div>
-            <div class="voice-selector">
-                <label>Voix:</label>
-                <select id="voiceSelect">
-                    <option value="alloy" selected>Alloy</option>
-                    <option value="echo">Echo</option>
-                    <option value="fable">Fable</option>
-                    <option value="nova">Nova</option>
-                    <option value="onyx">Onyx</option>
-                    <option value="shimmer">Shimmer</option>
-                </select>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>Qualité</label>
+                    <select id="qualitySelect">
+                        <option value="quart">Quart (240p)</option>
+                        <option value="demi" selected>Demi (480p)</option>
+                        <option value="full">Full (960p)</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label>Silence min: <span id="silenceValue">0.7</span>s</label>
+                    <input type="range" id="silenceThreshold" min="0.3" max="3.0" step="0.1" value="0.7">
+                </div>
+                <div class="setting-item">
+                    <label>Voix</label>
+                    <select id="voiceSelect">
+                        <option value="alloy" selected>Alloy</option>
+                        <option value="echo">Echo</option>
+                        <option value="fable">Fable</option>
+                        <option value="nova">Nova</option>
+                        <option value="onyx">Onyx</option>
+                        <option value="shimmer">Shimmer</option>
+                    </select>
+                </div>
             </div>
         </div>
         

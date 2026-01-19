@@ -25,109 +25,149 @@ body {
     position: relative;
 }
 
-.controls-top {
+.settings-btn {
     position: absolute;
     top: 20px;
     right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-end;
-}
-
-.quality-selector {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    color: white;
+    cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px 14px;
-    border-radius: 20px;
-    backdrop-filter: blur(8px);
+    justify-content: center;
+    transition: background 0.2s ease;
+    z-index: 100;
 }
 
-.quality-selector label {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
-.quality-selector select {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
+.settings-btn svg {
+    stroke: white;
+}
+
+.settings-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 280px;
+    background: rgba(20, 20, 40, 0.95);
+    backdrop-filter: blur(16px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 200;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(0.95);
+    transition: all 0.2s ease;
+}
+
+.settings-panel.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-header span {
     color: white;
-    padding: 6px 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.settings-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.settings-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.settings-content {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-item label {
+    color: rgba(255, 255, 255, 0.7);
     font-size: 13px;
+}
+
+.setting-item select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    font-size: 14px;
     cursor: pointer;
     outline: none;
+    transition: border-color 0.2s ease;
 }
 
-.quality-selector select option {
+.setting-item select:focus {
+    border-color: rgba(102, 126, 234, 0.5);
+}
+
+.setting-item select option {
     background: #1a1a2e;
     color: white;
 }
 
-.silence-slider {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px 14px;
-    border-radius: 20px;
-    backdrop-filter: blur(8px);
-}
-
-.silence-slider label {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
-}
-
-.silence-slider input[type="range"] {
-    width: 120px;
-    height: 4px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.2);
+.setting-item input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
     outline: none;
     cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
-.silence-slider input[type="range"]::-webkit-slider-thumb {
+.setting-item input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #667eea;
     cursor: pointer;
-}
-
-.voice-selector {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px 14px;
-    border-radius: 20px;
-    backdrop-filter: blur(8px);
-}
-
-.voice-selector label {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
-}
-
-.voice-selector select {
-    background: rgba(0, 0, 0, 0.3);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 6px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    cursor: pointer;
-    outline: none;
-}
-
-.voice-selector select option {
-    background: #1a1a2e;
-    color: white;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
 }
 
 .avatar-container {
@@ -215,4 +255,90 @@ body {
 #sendButton svg {
     width: 22px;
     height: 22px;
+}
+
+/* Mobile Responsivity */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+    
+    .settings-btn {
+        top: 15px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .settings-panel {
+        top: 15px;
+        right: 15px;
+        left: 15px;
+        width: auto;
+    }
+    
+    .avatar-container {
+        width: 70vw;
+        height: 70vw;
+        max-width: 350px;
+        max-height: 350px;
+    }
+    
+    .input-container {
+        bottom: 25px;
+        width: 95%;
+        gap: 10px;
+    }
+    
+    #userInput {
+        padding: 14px 20px;
+        font-size: 16px;
+    }
+    
+    #sendButton {
+        width: 50px;
+        height: 50px;
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .avatar-container {
+        width: 80vw;
+        height: 80vw;
+        max-width: 280px;
+        max-height: 280px;
+    }
+    
+    .input-container {
+        bottom: 20px;
+    }
+    
+    #userInput {
+        padding: 12px 16px;
+        font-size: 16px;
+    }
+    
+    #sendButton {
+        width: 46px;
+        height: 46px;
+    }
+    
+    #sendButton svg {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+@media (max-height: 600px) {
+    .avatar-container {
+        width: 50vmin;
+        height: 50vmin;
+        max-width: 250px;
+        max-height: 250px;
+    }
+    
+    .input-container {
+        bottom: 15px;
+    }
 }

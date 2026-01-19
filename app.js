@@ -61,6 +61,24 @@ class AvatarController {
             this.selectedVoice = this.voiceSelect.value;
         });
         
+        this.settingsBtn = document.getElementById('settingsBtn');
+        this.settingsPanel = document.getElementById('settingsPanel');
+        this.settingsClose = document.getElementById('settingsClose');
+        
+        this.settingsBtn.addEventListener('click', () => {
+            this.settingsPanel.classList.add('open');
+        });
+        
+        this.settingsClose.addEventListener('click', () => {
+            this.settingsPanel.classList.remove('open');
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (!this.settingsPanel.contains(e.target) && !this.settingsBtn.contains(e.target)) {
+                this.settingsPanel.classList.remove('open');
+            }
+        });
+        
         this.showFrame(0);
         this.startAccordionLoop();
     }
