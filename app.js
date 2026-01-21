@@ -449,11 +449,14 @@ class AvatarController {
             };
             
             console.log('Timeline pré-calculée:', timeline);
+            
+            this.returnToZeroDirectly();
         } catch (error) {
             console.error('Erreur préparation audio:', error);
             this.pendingAudio = null;
             this.preparedAudio = null;
             this.sendButton.disabled = false;
+            this.isWaitingAudio = false;
             this.isHalfAccordion = false;
         }
     }
@@ -569,6 +572,8 @@ class AvatarController {
         }
         
         this.pendingAudio = null;
+        this.isWaitingAudio = false;
+        this.onFrameZeroCallback = null;
         this.isHalfAccordion = false;
         
         if (this.animationFrameId) {
