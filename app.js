@@ -277,10 +277,13 @@ class AvatarController {
         try {
             this.conversationHistory.push({ role: 'user', content: message });
             
-            const response = await fetch('https://api.lamidetlm.com/api/chat', {
+            const response = await fetch('https://api.lamidetlm.com/api/realtime', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: this.conversationHistory })
+                body: JSON.stringify({ 
+                    messages: this.conversationHistory,
+                    voice: this.selectedVoice
+                })
             });
             
             if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
@@ -288,7 +291,7 @@ class AvatarController {
             const data = await response.json();
             this.conversationHistory.push({ role: 'assistant', content: data.message });
             
-            const audioBlob = await this.generateSpeech(data.message);
+            const audioBlob = this.pcm16ToWav(data.audio);
             this.pendingAudio = audioBlob;
             this.prepareAudio(audioBlob);
             
@@ -297,6 +300,42 @@ class AvatarController {
             this.sendButton.disabled = false;
             this.isHalfAccordion = false;
         }
+    }
+    
+    pcm16ToWav(base64Pcm) {
+        const pcmData = Uint8Array.from(atob(base64Pcm), c => c.charCodeAt(0));
+        const sampleRate = 24000;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        
+        const writeString = (offset, str) => {
+            for (let i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        };
+        
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + pcmData.length, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+        view.setUint16(32, numChannels * bitsPerSample / 8, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeString(36, 'data');
+        view.setUint32(40, pcmData.length, true);
+        
+        const wavBuffer = new Uint8Array(44 + pcmData.length);
+        wavBuffer.set(new Uint8Array(wavHeader), 0);
+        wavBuffer.set(pcmData, 44);
+        
+        return new Blob([wavBuffer], { type: 'audio/wav' });
     }
     
     async generateSpeech(text) {
