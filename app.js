@@ -317,34 +317,29 @@ class AvatarController {
         this.isWaitingAudio = true;
         this.waitingAudioState = 0;
         this.playDirection = 1;
-        if (this.currentFrame !== 0) {
-            this.returnToZeroDirectly();
-        }
+        this.onFrameZeroCallback = null;
     }
     
     returnToZeroDirectly() {
         if (this.currentFrame === 0) {
-            if (this.pendingAudio) {
-                this.playPendingAudio();
-            }
+            this.isWaitingAudio = false;
+            this.playPendingAudio();
             return;
         }
-        
+
         if (this.currentFrame <= 75) {
             this.playDirection = -1;
         } else {
             this.playDirection = 1;
         }
-        
+
         const checkZero = () => {
             if (this.currentFrame === 0) {
                 this.isWaitingAudio = false;
-                if (this.pendingAudio) {
-                    this.playPendingAudio();
-                }
+                this.playPendingAudio();
             }
         };
-        
+
         this.onFrameZeroCallback = checkZero;
     }
     
