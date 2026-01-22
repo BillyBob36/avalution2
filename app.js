@@ -7,7 +7,16 @@ class AvatarController {
         this.silenceThresholdInput = document.getElementById('silenceThreshold');
         this.silenceValueLabel = document.getElementById('silenceValue');
         this.voiceSelect = document.getElementById('voiceSelect');
-        
+        this.voiceModeToggle = document.getElementById('voiceModeToggle');
+        this.voiceButton = document.getElementById('voiceButton');
+        this.voiceStatus = document.querySelector('.voice-status');
+
+        this.isVoiceMode = false;
+        this.isRecording = false;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.mediaStream = null;
+
         this.FPS = 30;
         this.minSilenceDuration = 0.7;
         this.selectedVoice = 'alloy';
@@ -67,7 +76,26 @@ class AvatarController {
         this.voiceSelect.addEventListener('change', () => {
             this.selectedVoice = this.voiceSelect.value;
         });
-        
+
+        this.voiceModeToggle.addEventListener('change', () => {
+            this.toggleVoiceMode();
+        });
+
+        this.voiceButton.addEventListener('mousedown', () => this.startRecording());
+        this.voiceButton.addEventListener('mouseup', () => this.stopRecording());
+        this.voiceButton.addEventListener('mouseleave', () => {
+            if (this.isRecording) this.stopRecording();
+        });
+
+        this.voiceButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.startRecording();
+        });
+        this.voiceButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.stopRecording();
+        });
+
         this.settingsBtn = document.getElementById('settingsBtn');
         this.settingsPanel = document.getElementById('settingsPanel');
         this.settingsClose = document.getElementById('settingsClose');
@@ -665,6 +693,8 @@ class AvatarController {
             this.isPlaying = false;
             this.startAccordionLoop();
             this.sendButton.disabled = false;
+            this.voiceButton.disabled = false;
+            this.voiceStatus.textContent = 'Cliquez pour parler';
         };
     }
     
@@ -719,6 +749,217 @@ class AvatarController {
             }
         }
         return null;
+    }
+
+    toggleVoiceMode() {
+        this.isVoiceMode = this.voiceModeToggle.checked;
+
+        if (this.isVoiceMode) {
+            this.userInput.style.display = 'none';
+            this.sendButton.style.display = 'none';
+            this.voiceButton.style.display = 'flex';
+            this.requestMicrophoneAccess();
+        } else {
+            this.userInput.style.display = 'block';
+            this.sendButton.style.display = 'flex';
+            this.voiceButton.style.display = 'none';
+            if (this.mediaStream) {
+                this.mediaStream.getTracks().forEach(track => track.stop());
+                this.mediaStream = null;
+            }
+        }
+    }
+
+    async requestMicrophoneAccess() {
+        try {
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 24000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+            console.log('Microphone access granted');
+        } catch (error) {
+            console.error('Microphone access denied:', error);
+            alert('Impossible d\'accéder au microphone. Veuillez autoriser l\'accès pour utiliser le mode vocal.');
+            this.voiceModeToggle.checked = false;
+            this.toggleVoiceMode();
+        }
+    }
+
+    async startRecording() {
+        if (this.isRecording || !this.mediaStream) return;
+
+        this.isRecording = true;
+        this.audioChunks = [];
+        this.voiceButton.classList.add('recording');
+        this.voiceStatus.textContent = 'Enregistrement...';
+        this.voiceButton.disabled = false;
+
+        try {
+            this.mediaRecorder = new MediaRecorder(this.mediaStream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = () => {
+                this.handleVoiceMessage();
+            };
+
+            this.mediaRecorder.start();
+        } catch (error) {
+            console.error('Failed to start recording:', error);
+            this.isRecording = false;
+            this.voiceButton.classList.remove('recording');
+            this.voiceStatus.textContent = 'Cliquez pour parler';
+        }
+    }
+
+    stopRecording() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+
+        this.isRecording = false;
+        this.voiceButton.classList.remove('recording');
+        this.voiceStatus.textContent = 'Traitement...';
+
+        try {
+            this.mediaRecorder.stop();
+        } catch (error) {
+            console.error('Failed to stop recording:', error);
+            this.voiceStatus.textContent = 'Cliquez pour parler';
+        }
+    }
+
+    async handleVoiceMessage() {
+        if (this.audioChunks.length === 0) {
+            this.voiceStatus.textContent = 'Cliquez pour parler';
+            return;
+        }
+
+        this.voiceButton.disabled = true;
+        this.waitingForAudio = true;
+        this.audioReady = false;
+        this.holdingAtZero = false;
+        this.preparedAudio = null;
+
+        this.returnToStart(() => {
+            this.holdingAtZero = true;
+            if (!this.audioReady) {
+                this.startWaitingAnimation();
+            } else {
+                this.tryStartAudio();
+            }
+        });
+
+        try {
+            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+            const pcm16Base64 = await this.convertToPCM16(audioBlob);
+
+            const response = await fetch('/api/realtime-voice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    audio: pcm16Base64,
+                    voice: this.selectedVoice,
+                    conversationHistory: this.conversationHistory
+                })
+            });
+
+            if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
+
+            const data = await response.json();
+
+            if (data.userMessage) {
+                this.conversationHistory.push({ role: 'user', content: data.userMessage });
+            }
+
+            this.conversationHistory.push({ role: 'assistant', content: data.message });
+
+            const audioBlob2 = this.pcm16ToWav(data.audio);
+            this.pendingAudio = audioBlob2;
+            this.prepareAudio(audioBlob2);
+
+        } catch (error) {
+            console.error('Erreur voice:', error);
+            this.voiceButton.disabled = false;
+            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.waitingForAudio = false;
+            this.audioReady = false;
+            this.holdingAtZero = false;
+            this.isHalfAccordion = false;
+            this.isWaitingMode = false;
+            this.returningToZero = false;
+            this.waitingState = 0;
+
+            if (this.animationFrameId) {
+                cancelAnimationFrame(this.animationFrameId);
+                this.animationFrameId = null;
+            }
+            this.startAccordionLoop();
+        }
+    }
+
+    async convertToPCM16(audioBlob) {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+
+        try {
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const pcm16Data = this.audioBufferToPCM16(audioBuffer);
+            await audioContext.close();
+
+            const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pcm16Data)));
+            return base64;
+        } catch (error) {
+            console.error('Error converting to PCM16:', error);
+            await audioContext.close();
+            throw error;
+        }
+    }
+
+    audioBufferToPCM16(audioBuffer) {
+        const numberOfChannels = 1;
+        const sampleRate = 24000;
+        const length = Math.floor(audioBuffer.duration * sampleRate);
+
+        const pcm16 = new Int16Array(length);
+        const channelData = audioBuffer.getChannelData(0);
+        const resampledData = this.resample(channelData, audioBuffer.sampleRate, sampleRate);
+
+        for (let i = 0; i < length && i < resampledData.length; i++) {
+            const s = Math.max(-1, Math.min(1, resampledData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        return pcm16.buffer;
+    }
+
+    resample(buffer, fromSampleRate, toSampleRate) {
+        if (fromSampleRate === toSampleRate) {
+            return buffer;
+        }
+
+        const sampleRateRatio = fromSampleRate / toSampleRate;
+        const newLength = Math.floor(buffer.length / sampleRateRatio);
+        const result = new Float32Array(newLength);
+
+        for (let i = 0; i < newLength; i++) {
+            const index = i * sampleRateRatio;
+            const indexFloor = Math.floor(index);
+            const indexCeil = Math.min(indexFloor + 1, buffer.length - 1);
+            const interpolation = index - indexFloor;
+
+            result[i] = buffer[indexFloor] * (1 - interpolation) + buffer[indexCeil] * interpolation;
+        }
+
+        return result;
     }
 }
 
