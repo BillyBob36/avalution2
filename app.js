@@ -90,11 +90,11 @@ class AvatarController {
         this.voiceButton.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.startRecording();
-        });
+        }, { passive: false });
         this.voiceButton.addEventListener('touchend', (e) => {
             e.preventDefault();
             this.stopRecording();
-        });
+        }, { passive: false });
 
         this.settingsBtn = document.getElementById('settingsBtn');
         this.settingsPanel = document.getElementById('settingsPanel');
@@ -908,7 +908,7 @@ class AvatarController {
 
     async convertToPCM16(audioBlob) {
         const arrayBuffer = await audioBlob.arrayBuffer();
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
         try {
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
