@@ -36,7 +36,11 @@ class AvatarController {
         this.waitingForAudio = false;
         this.audioReady = false;
         this.holdingAtZero = false;
-        
+
+        this.isWaitingMode = false;
+        this.waitingState = 0;
+        this.returningToZero = false;
+
         this.silenceSegments = [];
         this.audioStartTime = 0;
         
@@ -266,10 +270,94 @@ class AvatarController {
     tryStartAudio() {
         if (!this.waitingForAudio || !this.audioReady) return;
         if (this.currentFrame !== 0) return;
-        
+
         this.waitingForAudio = false;
         this.holdingAtZero = false;
         this.playPendingAudio();
+    }
+
+    startWaitingAnimation() {
+        this.isWaitingMode = true;
+        this.waitingState = 0;
+        this.playDirection = 1;
+        this.currentFrame = 0;
+        this.isPlaying = true;
+        this.lastFrameTime = performance.now();
+        this.animateWaiting();
+    }
+
+    animateWaiting() {
+        if (this.audioReady && !this.returningToZero) {
+            this.startReturnToZero();
+            return;
+        }
+
+        const now = performance.now();
+        const elapsed = now - this.lastFrameTime;
+
+        if (elapsed >= this.FRAME_DURATION) {
+            this.lastFrameTime = now - (elapsed % this.FRAME_DURATION);
+
+            let nextFrame = this.currentFrame + this.playDirection;
+
+            if (this.waitingState === 0) {
+                if (nextFrame >= 10) {
+                    nextFrame = 10;
+                    this.waitingState = 1;
+                }
+            } else if (this.waitingState === 1) {
+                if (nextFrame >= 139) {
+                    nextFrame = 139;
+                    this.playDirection = -1;
+                    this.waitingState = 2;
+                }
+            } else if (this.waitingState === 2) {
+                if (nextFrame <= 10) {
+                    nextFrame = 10;
+                    this.playDirection = 1;
+                    this.waitingState = 1;
+                }
+            }
+
+            this.showFrame(nextFrame);
+        }
+
+        this.animationFrameId = requestAnimationFrame(() => this.animateWaiting());
+    }
+
+    startReturnToZero() {
+        this.returningToZero = true;
+
+        if (this.playDirection === 1) {
+            this.playDirection = -1;
+        }
+
+        this.animateReturnToZero();
+    }
+
+    animateReturnToZero() {
+        const now = performance.now();
+        const elapsed = now - this.lastFrameTime;
+
+        if (elapsed >= this.FRAME_DURATION) {
+            this.lastFrameTime = now - (elapsed % this.FRAME_DURATION);
+
+            let nextFrame = this.currentFrame + this.playDirection;
+
+            if (nextFrame <= 0) {
+                this.showFrame(0);
+                this.isWaitingMode = false;
+                this.returningToZero = false;
+                this.waitingState = 0;
+                this.playDirection = 1;
+                this.tryStartAudio();
+                return;
+            }
+
+            this.showFrame(nextFrame);
+        }
+
+        this.animationFrameId = requestAnimationFrame(() => this.animateReturnToZero());
     }
     
     async handleSend() {
@@ -285,7 +373,11 @@ class AvatarController {
         
         this.returnToStart(() => {
             this.holdingAtZero = true;
-            this.tryStartAudio();
+            if (!this.audioReady) {
+                this.startWaitingAnimation();
+            } else {
+                this.tryStartAudio();
+            }
         });
         
         try {
@@ -316,6 +408,9 @@ class AvatarController {
             this.audioReady = false;
             this.holdingAtZero = false;
             this.isHalfAccordion = false;
+            this.isWaitingMode = false;
+            this.returningToZero = false;
+            this.waitingState = 0;
         }
     }
     
@@ -394,6 +489,15 @@ class AvatarController {
             this.holdingAtZero = false;
             this.sendButton.disabled = false;
             this.isHalfAccordion = false;
+            this.isWaitingMode = false;
+            this.returningToZero = false;
+            this.waitingState = 0;
+
+            if (this.animationFrameId) {
+                cancelAnimationFrame(this.animationFrameId);
+                this.animationFrameId = null;
+            }
+            this.startAccordionLoop();
         }
     }
     
@@ -512,6 +616,9 @@ class AvatarController {
         this.audioReady = false;
         this.holdingAtZero = false;
         this.isHalfAccordion = false;
+        this.isWaitingMode = false;
+        this.returningToZero = false;
+        this.waitingState = 0;
         
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
