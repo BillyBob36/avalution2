@@ -4,6 +4,11 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 const WebSocket = require('ws');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const { Readable } = require('stream');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +31,36 @@ const AZURE_TTS_VOICE = process.env.AZURE_TTS_VOICE || 'alloy';
 const AZURE_REALTIME_ENDPOINT = process.env.AZURE_REALTIME_ENDPOINT;
 const AZURE_REALTIME_KEY = process.env.AZURE_REALTIME_KEY;
 const AZURE_REALTIME_DEPLOYMENT = process.env.AZURE_REALTIME_DEPLOYMENT || 'gpt-realtime';
+
+// Convert WebM audio to PCM16 format
+async function convertWebMToPCM16(webmBuffer) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        const inputStream = Readable.from(webmBuffer);
+
+        ffmpeg(inputStream)
+            .inputFormat('webm')
+            .audioChannels(1)
+            .audioFrequency(24000)
+            .audioCodec('pcm_s16le')
+            .format('s16le')
+            .on('error', (err) => {
+                console.error('FFmpeg error:', err);
+                reject(err);
+            })
+            .on('end', () => {
+                const pcm16Buffer = Buffer.concat(chunks);
+                resolve(pcm16Buffer);
+            })
+            .pipe()
+            .on('data', (chunk) => {
+                chunks.push(chunk);
+            })
+            .on('error', (err) => {
+                reject(err);
+            });
+    });
+}
 
 app.post('/api/chat', async (req, res) => {
     try {
@@ -241,6 +276,15 @@ app.post('/api/realtime-voice', async (req, res) => {
             throw new Error('Audio data is required');
         }
 
+        // Decode WebM from base64
+        const webmBuffer = Buffer.from(audio, 'base64');
+        console.log(`Received WebM audio: ${webmBuffer.length} bytes`);
+
+        // Convert WebM to PCM16
+        const pcm16Buffer = await convertWebMToPCM16(webmBuffer);
+        const pcm16Base64 = pcm16Buffer.toString('base64');
+        console.log(`Converted to PCM16: ${pcm16Buffer.length} bytes, ${pcm16Base64.length} base64 chars`);
+
         const conversationContext = conversationHistory?.slice(0, -1).map(m =>
             `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
         ).join('\n') || '';
@@ -299,7 +343,7 @@ app.post('/api/realtime-voice', async (req, res) => {
                             audioSent = true;
                             ws.send(JSON.stringify({
                                 type: 'input_audio_buffer.append',
-                                audio: audio
+                                audio: pcm16Base64
                             }));
                             ws.send(JSON.stringify({
                                 type: 'input_audio_buffer.commit'
