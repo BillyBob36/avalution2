@@ -694,7 +694,7 @@ class AvatarController {
             this.startAccordionLoop();
             this.sendButton.disabled = false;
             this.voiceButton.disabled = false;
-            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.voiceStatus.textContent = 'Maintenez pour parler';
         };
     }
     
@@ -818,7 +818,7 @@ class AvatarController {
             console.error('Failed to start recording:', error);
             this.isRecording = false;
             this.voiceButton.classList.remove('recording');
-            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.voiceStatus.textContent = 'Maintenez pour parler';
         }
     }
 
@@ -833,13 +833,26 @@ class AvatarController {
             this.mediaRecorder.stop();
         } catch (error) {
             console.error('Failed to stop recording:', error);
-            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.voiceStatus.textContent = 'Maintenez pour parler';
         }
     }
 
     async handleVoiceMessage() {
         if (this.audioChunks.length === 0) {
-            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.voiceStatus.textContent = 'Maintenez le bouton plus longtemps';
+            setTimeout(() => {
+                this.voiceStatus.textContent = 'Maintenez pour parler';
+            }, 2000);
+            return;
+        }
+
+        // Check if recording was too short
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+        if (audioBlob.size < 1000) { // Less than 1KB is likely too short
+            this.voiceStatus.textContent = 'Enregistrement trop court';
+            setTimeout(() => {
+                this.voiceStatus.textContent = 'Maintenez pour parler';
+            }, 2000);
             return;
         }
 
@@ -859,7 +872,6 @@ class AvatarController {
         });
 
         try {
-            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
             const pcm16Base64 = await this.convertToPCM16(audioBlob);
 
             const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
@@ -889,7 +901,7 @@ class AvatarController {
         } catch (error) {
             console.error('Erreur voice:', error);
             this.voiceButton.disabled = false;
-            this.voiceStatus.textContent = 'Cliquez pour parler';
+            this.voiceStatus.textContent = 'Maintenez pour parler';
             this.waitingForAudio = false;
             this.audioReady = false;
             this.holdingAtZero = false;
