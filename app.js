@@ -20,7 +20,7 @@ class AvatarController {
         this.isRecording = false;
         this.audioContext = null;
         this.mediaStream = null;
-        this.audioProcessor = null;
+        this.audioWorkletNode = null;
         this.audioChunks = [];
         this.vadTimeout = null;
         this.analyser = null;
@@ -456,21 +456,22 @@ class AvatarController {
                 sampleRate: 24000
             });
             
-            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-            const bufferSize = 4096;
-            this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+            await this.audioContext.audioWorklet.addModule('audio-processor.js');
             
-            this.audioProcessor.onaudioprocess = (e) => {
-                if (this.isRecording) {
-                    const inputData = e.inputBuffer.getChannelData(0);
-                    this.audioChunks.push(new Float32Array(inputData));
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'audio-recorder-processor');
+            
+            this.audioWorkletNode.port.onmessage = (event) => {
+                if (event.data.audioData && this.isRecording) {
+                    this.audioChunks.push(new Float32Array(event.data.audioData));
                 }
             };
             
-            source.connect(this.audioProcessor);
-            this.audioProcessor.connect(this.audioContext.destination);
+            source.connect(this.audioWorkletNode);
+            this.audioWorkletNode.connect(this.audioContext.destination);
             
             this.isRecording = true;
+            this.audioWorkletNode.port.postMessage({ command: 'start' });
             this.voiceButton.classList.add('recording');
             
         } catch (error) {
@@ -495,25 +496,26 @@ class AvatarController {
                 sampleRate: 24000
             });
             
+            await this.audioContext.audioWorklet.addModule('audio-processor.js');
+            
             const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-            const bufferSize = 4096;
-            this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+            this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'audio-recorder-processor');
             
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 2048;
             source.connect(this.analyser);
             
-            this.audioProcessor.onaudioprocess = (e) => {
-                if (this.isRecording) {
-                    const inputData = e.inputBuffer.getChannelData(0);
-                    this.audioChunks.push(new Float32Array(inputData));
+            this.audioWorkletNode.port.onmessage = (event) => {
+                if (event.data.audioData && this.isRecording) {
+                    this.audioChunks.push(new Float32Array(event.data.audioData));
                 }
             };
             
-            source.connect(this.audioProcessor);
-            this.audioProcessor.connect(this.audioContext.destination);
+            source.connect(this.audioWorkletNode);
+            this.audioWorkletNode.connect(this.audioContext.destination);
             
             this.isRecording = true;
+            this.audioWorkletNode.port.postMessage({ command: 'start' });
             this.voiceButton.classList.add('recording');
             
             const bufferLength = this.analyser.frequencyBinCount;
@@ -558,9 +560,10 @@ class AvatarController {
             this.isRecording = false;
             this.voiceButton.classList.remove('recording');
             
-            if (this.audioProcessor) {
-                this.audioProcessor.disconnect();
-                this.audioProcessor = null;
+            if (this.audioWorkletNode) {
+                this.audioWorkletNode.port.postMessage({ command: 'stop' });
+                this.audioWorkletNode.disconnect();
+                this.audioWorkletNode = null;
             }
             
             if (this.mediaStream) {
