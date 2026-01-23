@@ -862,7 +862,7 @@ class AvatarController {
             const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
             const pcm16Base64 = await this.convertToPCM16(audioBlob);
 
-            const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
+            const response = await fetch('/api/realtime-voice', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
