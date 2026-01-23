@@ -925,30 +925,26 @@ class AvatarController {
         try {
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
             const pcm16Data = this.audioBufferToPCM16(audioBuffer);
+            await audioContext.close();
 
-            // Convert to base64 efficiently without stack overflow
+            // Convert to base64 using proper chunking to avoid stack overflow
             const uint8Array = new Uint8Array(pcm16Data);
-            const chunkSize = 0x8000; // 32KB chunks
-            const parts = [];
+            const chunkSize = 8192; // 8KB chunks to avoid call stack issues
+            let binaryString = '';
 
             for (let i = 0; i < uint8Array.length; i += chunkSize) {
                 const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-                parts.push(String.fromCharCode(...chunk));
+                // Use reduce instead of apply to avoid stack overflow
+                binaryString += Array.from(chunk).map(byte => String.fromCharCode(byte)).join('');
             }
 
-            const encoded = btoa(parts.join(''));
+            const encoded = btoa(binaryString);
             console.log(`Audio converted: ${audioBuffer.duration.toFixed(2)}s, ${encoded.length} base64 chars`);
-
-            await audioContext.close();
             return encoded;
         } catch (error) {
             console.error('Error converting to PCM16:', error);
-            try {
-                if (audioContext.state !== 'closed') {
-                    await audioContext.close();
-                }
-            } catch (closeError) {
-                // Ignore close errors
+            if (audioContext.state !== 'closed') {
+                await audioContext.close();
             }
             throw error;
         }
