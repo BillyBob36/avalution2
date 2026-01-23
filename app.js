@@ -694,7 +694,7 @@ class AvatarController {
             this.startAccordionLoop();
             this.sendButton.disabled = false;
             this.voiceButton.disabled = false;
-            this.voiceStatus.textContent = 'Maintenez pour parler';
+            this.voiceStatus.textContent = 'Cliquez pour parler';
         };
     }
     
@@ -818,7 +818,7 @@ class AvatarController {
             console.error('Failed to start recording:', error);
             this.isRecording = false;
             this.voiceButton.classList.remove('recording');
-            this.voiceStatus.textContent = 'Maintenez pour parler';
+            this.voiceStatus.textContent = 'Cliquez pour parler';
         }
     }
 
@@ -833,26 +833,13 @@ class AvatarController {
             this.mediaRecorder.stop();
         } catch (error) {
             console.error('Failed to stop recording:', error);
-            this.voiceStatus.textContent = 'Maintenez pour parler';
+            this.voiceStatus.textContent = 'Cliquez pour parler';
         }
     }
 
     async handleVoiceMessage() {
         if (this.audioChunks.length === 0) {
-            this.voiceStatus.textContent = 'Maintenez le bouton plus longtemps';
-            setTimeout(() => {
-                this.voiceStatus.textContent = 'Maintenez pour parler';
-            }, 2000);
-            return;
-        }
-
-        // Check if recording was too short
-        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
-        if (audioBlob.size < 1000) { // Less than 1KB is likely too short
-            this.voiceStatus.textContent = 'Enregistrement trop court';
-            setTimeout(() => {
-                this.voiceStatus.textContent = 'Maintenez pour parler';
-            }, 2000);
+            this.voiceStatus.textContent = 'Cliquez pour parler';
             return;
         }
 
@@ -872,6 +859,7 @@ class AvatarController {
         });
 
         try {
+            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
             const pcm16Base64 = await this.convertToPCM16(audioBlob);
 
             const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
@@ -901,7 +889,7 @@ class AvatarController {
         } catch (error) {
             console.error('Erreur voice:', error);
             this.voiceButton.disabled = false;
-            this.voiceStatus.textContent = 'Maintenez pour parler';
+            this.voiceStatus.textContent = 'Cliquez pour parler';
             this.waitingForAudio = false;
             this.audioReady = false;
             this.holdingAtZero = false;
@@ -927,25 +915,11 @@ class AvatarController {
             const pcm16Data = this.audioBufferToPCM16(audioBuffer);
             await audioContext.close();
 
-            // Convert to base64 using proper chunking to avoid stack overflow
-            const uint8Array = new Uint8Array(pcm16Data);
-            const chunkSize = 8192; // 8KB chunks to avoid call stack issues
-            let binaryString = '';
-
-            for (let i = 0; i < uint8Array.length; i += chunkSize) {
-                const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-                // Use reduce instead of apply to avoid stack overflow
-                binaryString += Array.from(chunk).map(byte => String.fromCharCode(byte)).join('');
-            }
-
-            const encoded = btoa(binaryString);
-            console.log(`Audio converted: ${audioBuffer.duration.toFixed(2)}s, ${encoded.length} base64 chars`);
-            return encoded;
+            const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pcm16Data)));
+            return base64;
         } catch (error) {
             console.error('Error converting to PCM16:', error);
-            if (audioContext.state !== 'closed') {
-                await audioContext.close();
-            }
+            await audioContext.close();
             throw error;
         }
     }
