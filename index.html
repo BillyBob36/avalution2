@@ -45,6 +45,21 @@
                         <option value="shimmer">Shimmer</option>
                     </select>
                 </div>
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="voiceModeToggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Mode vocal</span>
+                    </label>
+                </div>
+                <div class="setting-item" id="voiceMethodContainer" style="display: none;">
+                    <label>Méthode d'enregistrement</label>
+                    <select id="voiceMethodSelect">
+                        <option value="push-to-talk" selected>Push-to-talk (maintenir)</option>
+                        <option value="toggle">Toggle (clic on/off)</option>
+                        <option value="vad">Détection auto (VAD)</option>
+                    </select>
+                </div>
             </div>
         </div>
         
@@ -54,6 +69,14 @@
         
         <div class="input-container">
             <input type="text" id="userInput" placeholder="Écrivez votre message..." autocomplete="off">
+            <button id="voiceButton" style="display: none;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
             <button id="sendButton">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>

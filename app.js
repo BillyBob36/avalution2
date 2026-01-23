@@ -7,10 +7,20 @@ class AvatarController {
         this.silenceThresholdInput = document.getElementById('silenceThreshold');
         this.silenceValueLabel = document.getElementById('silenceValue');
         this.voiceSelect = document.getElementById('voiceSelect');
+        this.voiceModeToggle = document.getElementById('voiceModeToggle');
+        this.voiceMethodSelect = document.getElementById('voiceMethodSelect');
+        this.voiceMethodContainer = document.getElementById('voiceMethodContainer');
+        this.voiceButton = document.getElementById('voiceButton');
         
         this.FPS = 30;
         this.minSilenceDuration = 0.7;
         this.selectedVoice = 'alloy';
+        this.isVoiceMode = false;
+        this.voiceMethod = 'push-to-talk';
+        this.isRecording = false;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.vadTimeout = null;
         this.FRAME_COUNT = 150;
         this.FRAME_DURATION = 1000 / this.FPS;
         this.VIDEO_DURATION = 5.0;
@@ -67,6 +77,22 @@ class AvatarController {
         this.voiceSelect.addEventListener('change', () => {
             this.selectedVoice = this.voiceSelect.value;
         });
+        
+        this.voiceModeToggle.addEventListener('change', () => {
+            this.isVoiceMode = this.voiceModeToggle.checked;
+            this.switchInputMode();
+        });
+        
+        this.voiceMethodSelect.addEventListener('change', () => {
+            this.voiceMethod = this.voiceMethodSelect.value;
+        });
+        
+        this.voiceButton.addEventListener('mousedown', (e) => this.handleVoiceMouseDown(e));
+        this.voiceButton.addEventListener('mouseup', (e) => this.handleVoiceMouseUp(e));
+        this.voiceButton.addEventListener('mouseleave', (e) => this.handleVoiceMouseLeave(e));
+        this.voiceButton.addEventListener('touchstart', (e) => this.handleVoiceMouseDown(e));
+        this.voiceButton.addEventListener('touchend', (e) => this.handleVoiceMouseUp(e));
+        this.voiceButton.addEventListener('click', (e) => this.handleVoiceClick(e));
         
         this.settingsBtn = document.getElementById('settingsBtn');
         this.settingsPanel = document.getElementById('settingsPanel');
@@ -360,6 +386,226 @@ class AvatarController {
         this.animationFrameId = requestAnimationFrame(() => this.animateReturnToZero());
     }
     
+    switchInputMode() {
+        if (this.isVoiceMode) {
+            this.userInput.style.display = 'none';
+            this.voiceButton.style.display = 'flex';
+            this.voiceMethodContainer.style.display = 'block';
+        } else {
+            this.userInput.style.display = 'block';
+            this.voiceButton.style.display = 'none';
+            this.voiceMethodContainer.style.display = 'none';
+            if (this.isRecording) {
+                this.stopRecording();
+            }
+        }
+    }
+    
+    handleVoiceMouseDown(e) {
+        if (this.voiceMethod === 'push-to-talk') {
+            e.preventDefault();
+            this.startRecording();
+        }
+    }
+    
+    handleVoiceMouseUp(e) {
+        if (this.voiceMethod === 'push-to-talk' && this.isRecording) {
+            e.preventDefault();
+            this.stopRecording();
+        }
+    }
+    
+    handleVoiceMouseLeave(e) {
+        if (this.voiceMethod === 'push-to-talk' && this.isRecording) {
+            this.stopRecording();
+        }
+    }
+    
+    handleVoiceClick(e) {
+        if (this.voiceMethod === 'toggle') {
+            if (this.isRecording) {
+                this.stopRecording();
+            } else {
+                this.startRecording();
+            }
+        } else if (this.voiceMethod === 'vad') {
+            if (this.isRecording) {
+                this.stopRecording();
+            } else {
+                this.startRecordingVAD();
+            }
+        }
+    }
+    
+    async startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.audioChunks = [];
+            
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm'
+            });
+            
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+            
+            this.mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(track => track.stop());
+                this.processAudioRecording();
+            };
+            
+            this.mediaRecorder.start();
+            this.isRecording = true;
+            this.voiceButton.classList.add('recording');
+            
+        } catch (error) {
+            console.error('Erreur accès micro:', error);
+            alert('Impossible d\'accéder au microphone. Vérifiez les permissions.');
+        }
+    }
+    
+    async startRecordingVAD() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.audioChunks = [];
+            
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm'
+            });
+            
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+            
+            this.mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(track => track.stop());
+                this.processAudioRecording();
+            };
+            
+            this.mediaRecorder.start();
+            this.isRecording = true;
+            this.voiceButton.classList.add('recording');
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            source.connect(analyser);
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            const checkAudio = () => {
+                if (!this.isRecording) return;
+                
+                analyser.getByteTimeDomainData(dataArray);
+                
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const normalized = (dataArray[i] - 128) / 128;
+                    sum += normalized * normalized;
+                }
+                const rms = Math.sqrt(sum / bufferLength);
+                
+                if (rms > 0.02) {
+                    if (this.vadTimeout) {
+                        clearTimeout(this.vadTimeout);
+                    }
+                    this.vadTimeout = setTimeout(() => {
+                        if (this.isRecording) {
+                            this.stopRecording();
+                        }
+                    }, 1500);
+                }
+                
+                requestAnimationFrame(checkAudio);
+            };
+            
+            checkAudio();
+            
+        } catch (error) {
+            console.error('Erreur accès micro:', error);
+            alert('Impossible d\'accéder au microphone. Vérifiez les permissions.');
+        }
+    }
+    
+    stopRecording() {
+        if (this.mediaRecorder && this.isRecording) {
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+            this.voiceButton.classList.remove('recording');
+            if (this.vadTimeout) {
+                clearTimeout(this.vadTimeout);
+                this.vadTimeout = null;
+            }
+        }
+    }
+    
+    async processAudioRecording() {
+        if (this.audioChunks.length === 0) return;
+        
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        this.audioChunks = [];
+        
+        this.voiceButton.disabled = true;
+        this.waitingForAudio = true;
+        this.audioReady = false;
+        this.holdingAtZero = false;
+        this.preparedAudio = null;
+        
+        this.returnToStart(() => {
+            this.holdingAtZero = true;
+            if (!this.audioReady) {
+                this.startWaitingAnimation();
+            } else {
+                this.tryStartAudio();
+            }
+        });
+        
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            formData.append('voice', this.selectedVoice);
+            
+            const conversationContext = this.conversationHistory.map(m => 
+                `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+            ).join('\n');
+            formData.append('context', conversationContext);
+            
+            const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
+            
+            const data = await response.json();
+            
+            this.conversationHistory.push({ role: 'user', content: data.transcription || '[Audio]' });
+            this.conversationHistory.push({ role: 'assistant', content: data.message });
+            
+            const audioResponseBlob = this.pcm16ToWav(data.audio);
+            this.pendingAudio = audioResponseBlob;
+            this.prepareAudio(audioResponseBlob);
+            
+        } catch (error) {
+            console.error('Erreur:', error);
+            this.voiceButton.disabled = false;
+            this.waitingForAudio = false;
+            this.audioReady = false;
+            this.holdingAtZero = false;
+            this.isHalfAccordion = false;
+            this.isWaitingMode = false;
+            this.returningToZero = false;
+            this.waitingState = 0;
+        }
+    }
+    
     async handleSend() {
         const message = this.userInput.value.trim();
         if (!message) return;
@@ -488,6 +734,7 @@ class AvatarController {
             this.audioReady = false;
             this.holdingAtZero = false;
             this.sendButton.disabled = false;
+            this.voiceButton.disabled = false;
             this.isHalfAccordion = false;
             this.isWaitingMode = false;
             this.returningToZero = false;
@@ -665,6 +912,7 @@ class AvatarController {
             this.isPlaying = false;
             this.startAccordionLoop();
             this.sendButton.disabled = false;
+            this.voiceButton.disabled = false;
         };
     }
     
