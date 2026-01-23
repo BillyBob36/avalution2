@@ -872,24 +872,13 @@ class AvatarController {
         });
 
         try {
-            // Convert WebM blob to base64
-            const reader = new FileReader();
-            const webmBase64 = await new Promise((resolve, reject) => {
-                reader.onload = () => {
-                    const base64 = reader.result.split(',')[1];
-                    resolve(base64);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(audioBlob);
-            });
-
-            console.log(`Sending WebM audio: ${audioBlob.size} bytes, ${webmBase64.length} base64 chars`);
+            const pcm16Base64 = await this.convertToPCM16(audioBlob);
 
             const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    audio: webmBase64,
+                    audio: pcm16Base64,
                     voice: this.selectedVoice,
                     conversationHistory: this.conversationHistory
                 })
@@ -929,6 +918,79 @@ class AvatarController {
         }
     }
 
+    async convertToPCM16(audioBlob) {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        try {
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const pcm16Data = this.audioBufferToPCM16(audioBuffer);
+
+            // Convert to base64 efficiently without stack overflow
+            const uint8Array = new Uint8Array(pcm16Data);
+            const chunkSize = 0x8000; // 32KB chunks
+            const parts = [];
+
+            for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+                parts.push(String.fromCharCode(...chunk));
+            }
+
+            const encoded = btoa(parts.join(''));
+            console.log(`Audio converted: ${audioBuffer.duration.toFixed(2)}s, ${encoded.length} base64 chars`);
+
+            await audioContext.close();
+            return encoded;
+        } catch (error) {
+            console.error('Error converting to PCM16:', error);
+            try {
+                if (audioContext.state !== 'closed') {
+                    await audioContext.close();
+                }
+            } catch (closeError) {
+                // Ignore close errors
+            }
+            throw error;
+        }
+    }
+
+    audioBufferToPCM16(audioBuffer) {
+        const numberOfChannels = 1;
+        const sampleRate = 24000;
+        const length = Math.floor(audioBuffer.duration * sampleRate);
+
+        const pcm16 = new Int16Array(length);
+        const channelData = audioBuffer.getChannelData(0);
+        const resampledData = this.resample(channelData, audioBuffer.sampleRate, sampleRate);
+
+        for (let i = 0; i < length && i < resampledData.length; i++) {
+            const s = Math.max(-1, Math.min(1, resampledData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        return pcm16.buffer;
+    }
+
+    resample(buffer, fromSampleRate, toSampleRate) {
+        if (fromSampleRate === toSampleRate) {
+            return buffer;
+        }
+
+        const sampleRateRatio = fromSampleRate / toSampleRate;
+        const newLength = Math.floor(buffer.length / sampleRateRatio);
+        const result = new Float32Array(newLength);
+
+        for (let i = 0; i < newLength; i++) {
+            const index = i * sampleRateRatio;
+            const indexFloor = Math.floor(index);
+            const indexCeil = Math.min(indexFloor + 1, buffer.length - 1);
+            const interpolation = index - indexFloor;
+
+            result[i] = buffer[indexFloor] * (1 - interpolation) + buffer[indexCeil] * interpolation;
+        }
+
+        return result;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
