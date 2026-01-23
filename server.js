@@ -4,8 +4,6 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 const WebSocket = require('ws');
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -231,13 +229,12 @@ app.post('/api/realtime', async (req, res) => {
     }
 });
 
-app.post('/api/realtime-voice', upload.single('audio'), async (req, res) => {
+app.post('/api/realtime-voice', async (req, res) => {
     try {
-        const { voice, context } = req.body;
-        const audioFile = req.file;
+        const { audio, voice, context } = req.body;
         
-        if (!audioFile) {
-            return res.status(400).json({ error: 'No audio file provided' });
+        if (!audio) {
+            return res.status(400).json({ error: 'No audio data provided' });
         }
         
         if (!AZURE_REALTIME_ENDPOINT || !AZURE_REALTIME_KEY) {
@@ -264,6 +261,8 @@ app.post('/api/realtime-voice', upload.single('audio'), async (req, res) => {
             }
         }, 30000);
         
+        console.log('Received PCM16 audio, base64 length:', audio.length);
+        
         ws.on('open', () => {
             ws.send(JSON.stringify({
                 type: 'session.update',
@@ -289,11 +288,11 @@ app.post('/api/realtime-voice', upload.single('audio'), async (req, res) => {
                     if (!sessionConfigured) {
                         sessionConfigured = true;
                         
-                        const audioBase64 = audioFile.buffer.toString('base64');
+                        console.log('Sending PCM16 audio to API...');
                         
                         ws.send(JSON.stringify({
                             type: 'input_audio_buffer.append',
-                            audio: audioBase64
+                            audio: audio
                         }));
                         
                         ws.send(JSON.stringify({
@@ -308,6 +307,7 @@ app.post('/api/realtime-voice', upload.single('audio'), async (req, res) => {
                 
                 if (event.type === 'conversation.item.input_audio_transcription.completed') {
                     transcription = event.transcript;
+                    console.log('Transcription received:', transcription);
                 }
                 
                 if (event.type === 'response.audio.delta') {

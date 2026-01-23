@@ -18,9 +18,12 @@ class AvatarController {
         this.isVoiceMode = false;
         this.voiceMethod = 'push-to-talk';
         this.isRecording = false;
-        this.mediaRecorder = null;
+        this.audioContext = null;
+        this.mediaStream = null;
+        this.audioProcessor = null;
         this.audioChunks = [];
         this.vadTimeout = null;
+        this.analyser = null;
         this.FRAME_COUNT = 150;
         this.FRAME_DURATION = 1000 / this.FPS;
         this.VIDEO_DURATION = 5.0;
@@ -439,25 +442,34 @@ class AvatarController {
     
     async startRecording() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    sampleRate: 24000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
             this.audioChunks = [];
             
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm'
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 24000
             });
             
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.audioChunks.push(event.data);
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            const bufferSize = 4096;
+            this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+            
+            this.audioProcessor.onaudioprocess = (e) => {
+                if (this.isRecording) {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    this.audioChunks.push(new Float32Array(inputData));
                 }
             };
             
-            this.mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(track => track.stop());
-                this.processAudioRecording();
-            };
+            source.connect(this.audioProcessor);
+            this.audioProcessor.connect(this.audioContext.destination);
             
-            this.mediaRecorder.start();
             this.isRecording = true;
             this.voiceButton.classList.add('recording');
             
@@ -469,41 +481,48 @@ class AvatarController {
     
     async startRecordingVAD() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    sampleRate: 24000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
             this.audioChunks = [];
             
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm'
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 24000
             });
             
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.audioChunks.push(event.data);
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            const bufferSize = 4096;
+            this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+            
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 2048;
+            source.connect(this.analyser);
+            
+            this.audioProcessor.onaudioprocess = (e) => {
+                if (this.isRecording) {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    this.audioChunks.push(new Float32Array(inputData));
                 }
             };
             
-            this.mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(track => track.stop());
-                this.processAudioRecording();
-            };
+            source.connect(this.audioProcessor);
+            this.audioProcessor.connect(this.audioContext.destination);
             
-            this.mediaRecorder.start();
             this.isRecording = true;
             this.voiceButton.classList.add('recording');
             
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 2048;
-            source.connect(analyser);
-            
-            const bufferLength = analyser.frequencyBinCount;
+            const bufferLength = this.analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
             
             const checkAudio = () => {
                 if (!this.isRecording) return;
                 
-                analyser.getByteTimeDomainData(dataArray);
+                this.analyser.getByteTimeDomainData(dataArray);
                 
                 let sum = 0;
                 for (let i = 0; i < bufferLength; i++) {
@@ -535,21 +554,68 @@ class AvatarController {
     }
     
     stopRecording() {
-        if (this.mediaRecorder && this.isRecording) {
-            this.mediaRecorder.stop();
+        if (this.isRecording) {
             this.isRecording = false;
             this.voiceButton.classList.remove('recording');
+            
+            if (this.audioProcessor) {
+                this.audioProcessor.disconnect();
+                this.audioProcessor = null;
+            }
+            
+            if (this.mediaStream) {
+                this.mediaStream.getTracks().forEach(track => track.stop());
+                this.mediaStream = null;
+            }
+            
+            if (this.audioContext) {
+                this.audioContext.close();
+            }
+            
             if (this.vadTimeout) {
                 clearTimeout(this.vadTimeout);
                 this.vadTimeout = null;
             }
+            
+            this.processAudioRecording();
         }
+    }
+    
+    floatTo16BitPCM(float32Array) {
+        const buffer = new ArrayBuffer(float32Array.length * 2);
+        const view = new DataView(buffer);
+        let offset = 0;
+        for (let i = 0; i < float32Array.length; i++, offset += 2) {
+            let s = Math.max(-1, Math.min(1, float32Array[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        }
+        return buffer;
+    }
+    
+    base64EncodeAudio(float32Array) {
+        const arrayBuffer = this.floatTo16BitPCM(float32Array);
+        let binary = '';
+        let bytes = new Uint8Array(arrayBuffer);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            let chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(binary);
     }
     
     async processAudioRecording() {
         if (this.audioChunks.length === 0) return;
         
-        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const totalLength = this.audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const combinedAudio = new Float32Array(totalLength);
+        let offset = 0;
+        for (const chunk of this.audioChunks) {
+            combinedAudio.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        const audioPCM16Base64 = this.base64EncodeAudio(combinedAudio);
         this.audioChunks = [];
         
         this.voiceButton.disabled = true;
@@ -568,18 +634,18 @@ class AvatarController {
         });
         
         try {
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-            formData.append('voice', this.selectedVoice);
-            
             const conversationContext = this.conversationHistory.map(m => 
                 `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
             ).join('\n');
-            formData.append('context', conversationContext);
             
             const response = await fetch('https://api.lamidetlm.com/api/realtime-voice', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    audio: audioPCM16Base64,
+                    voice: this.selectedVoice,
+                    context: conversationContext
+                })
             });
             
             if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
