@@ -110,35 +110,35 @@ app.post('/api/speech', async (req, res) => {
 app.post('/api/realtime', async (req, res) => {
     try {
         const { messages, voice } = req.body;
-
+        
         if (!AZURE_REALTIME_ENDPOINT || !AZURE_REALTIME_KEY) {
             throw new Error('Realtime API not configured');
         }
-
+        
         const userMessage = messages[messages.length - 1]?.content || '';
-        const conversationContext = messages.slice(0, -1).map(m =>
+        const conversationContext = messages.slice(0, -1).map(m => 
             `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
         ).join('\n');
-
+        
         const wsUrl = `${AZURE_REALTIME_ENDPOINT}?api-version=2024-10-01-preview&deployment=${AZURE_REALTIME_DEPLOYMENT}`;
-
+        
         const ws = new WebSocket(wsUrl, {
             headers: {
                 'api-key': AZURE_REALTIME_KEY
             }
         });
-
+        
         const audioChunks = [];
         let textResponse = '';
         let sessionConfigured = false;
-
+        
         const timeout = setTimeout(() => {
             ws.close();
             if (!res.headersSent) {
                 res.status(504).json({ error: 'Timeout' });
             }
         }, 30000);
-
+        
         ws.on('open', () => {
             ws.send(JSON.stringify({
                 type: 'session.update',
@@ -152,11 +152,11 @@ app.post('/api/realtime', async (req, res) => {
                 }
             }));
         });
-
+        
         ws.on('message', (data) => {
             try {
                 const event = JSON.parse(data.toString());
-
+                
                 if (event.type === 'session.created' || event.type === 'session.updated') {
                     if (!sessionConfigured) {
                         sessionConfigured = true;
@@ -176,28 +176,28 @@ app.post('/api/realtime', async (req, res) => {
                         }));
                     }
                 }
-
+                
                 if (event.type === 'response.audio.delta') {
                     audioChunks.push(Buffer.from(event.delta, 'base64'));
                 }
-
+                
                 if (event.type === 'response.audio_transcript.delta') {
                     textResponse += event.delta;
                 }
-
+                
                 if (event.type === 'response.done') {
                     clearTimeout(timeout);
                     ws.close();
-
+                    
                     const audioBuffer = Buffer.concat(audioChunks);
-
+                    
                     res.json({
                         message: textResponse,
                         audio: audioBuffer.toString('base64'),
                         format: 'pcm16'
                     });
                 }
-
+                
                 if (event.type === 'error') {
                     console.error('Realtime API error:', event.error);
                     clearTimeout(timeout);
@@ -210,7 +210,7 @@ app.post('/api/realtime', async (req, res) => {
                 console.error('Error parsing realtime message:', e);
             }
         });
-
+        
         ws.on('error', (err) => {
             console.error('WebSocket error:', err);
             clearTimeout(timeout);
@@ -218,149 +218,13 @@ app.post('/api/realtime', async (req, res) => {
                 res.status(500).json({ error: err.message });
             }
         });
-
+        
         ws.on('close', () => {
             clearTimeout(timeout);
         });
-
+        
     } catch (error) {
         console.error('Erreur realtime:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/realtime-voice', async (req, res) => {
-    try {
-        const { audio, voice, conversationHistory } = req.body;
-
-        if (!AZURE_REALTIME_ENDPOINT || !AZURE_REALTIME_KEY) {
-            throw new Error('Realtime API not configured');
-        }
-
-        if (!audio) {
-            throw new Error('Audio data is required');
-        }
-
-        const conversationContext = conversationHistory?.slice(0, -1).map(m =>
-            `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
-        ).join('\n') || '';
-
-        const wsUrl = `${AZURE_REALTIME_ENDPOINT}?api-version=2024-10-01-preview&deployment=${AZURE_REALTIME_DEPLOYMENT}`;
-
-        const ws = new WebSocket(wsUrl, {
-            headers: {
-                'api-key': AZURE_REALTIME_KEY
-            }
-        });
-
-        const audioChunks = [];
-        let textResponse = '';
-        let userTranscript = '';
-        let sessionConfigured = false;
-        let audioSent = false;
-
-        const timeout = setTimeout(() => {
-            ws.close();
-            if (!res.headersSent) {
-                res.status(504).json({ error: 'Timeout' });
-            }
-        }, 30000);
-
-        ws.on('open', () => {
-            ws.send(JSON.stringify({
-                type: 'session.update',
-                session: {
-                    modalities: ['text', 'audio'],
-                    instructions: 'Tu es un assistant virtuel sympathique et serviable. Réponds de manière naturelle et conversationnelle en français. Garde tes réponses courtes et concises (2-3 phrases maximum).' + (conversationContext ? '\n\nContexte de la conversation:\n' + conversationContext : ''),
-                    voice: voice || 'alloy',
-                    input_audio_format: 'pcm16',
-                    output_audio_format: 'pcm16',
-                    input_audio_transcription: {
-                        model: 'whisper-1'
-                    },
-                    turn_detection: {
-                        type: 'server_vad',
-                        threshold: 0.5,
-                        prefix_padding_ms: 300,
-                        silence_duration_ms: 500
-                    }
-                }
-            }));
-        });
-
-        ws.on('message', (data) => {
-            try {
-                const event = JSON.parse(data.toString());
-
-                if (event.type === 'session.created' || event.type === 'session.updated') {
-                    if (!sessionConfigured) {
-                        sessionConfigured = true;
-                        if (!audioSent) {
-                            audioSent = true;
-                            ws.send(JSON.stringify({
-                                type: 'input_audio_buffer.append',
-                                audio: audio
-                            }));
-                            ws.send(JSON.stringify({
-                                type: 'input_audio_buffer.commit'
-                            }));
-                        }
-                    }
-                }
-
-                if (event.type === 'conversation.item.input_audio_transcription.completed') {
-                    userTranscript = event.transcript || '';
-                }
-
-                if (event.type === 'response.audio.delta') {
-                    audioChunks.push(Buffer.from(event.delta, 'base64'));
-                }
-
-                if (event.type === 'response.audio_transcript.delta') {
-                    textResponse += event.delta;
-                }
-
-                if (event.type === 'response.done') {
-                    clearTimeout(timeout);
-                    ws.close();
-
-                    const audioBuffer = Buffer.concat(audioChunks);
-
-                    res.json({
-                        userMessage: userTranscript,
-                        message: textResponse,
-                        audio: audioBuffer.toString('base64'),
-                        format: 'pcm16'
-                    });
-                }
-
-                if (event.type === 'error') {
-                    console.error('Realtime Voice API error:', event.error);
-                    clearTimeout(timeout);
-                    ws.close();
-                    if (!res.headersSent) {
-                        res.status(500).json({ error: event.error?.message || 'Realtime Voice API error' });
-                    }
-                }
-            } catch (e) {
-                console.error('Error parsing realtime voice message:', e);
-            }
-        });
-
-        ws.on('error', (err) => {
-            console.error('WebSocket error:', err);
-            clearTimeout(timeout);
-            if (!res.headersSent) {
-                res.status(500).json({ error: err.message });
-            }
-        });
-
-        ws.on('close', () => {
-            clearTimeout(timeout);
-        });
-
-    } catch (error) {
-        console.error('Erreur realtime voice:', error);
         res.status(500).json({ error: error.message });
     }
 });
